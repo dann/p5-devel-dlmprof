@@ -29,17 +29,23 @@ sub child_init {
 }
 
 sub child_exit {
+    profile_dynamic_loaded_modules();
+    return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
+}
+
+sub profile_dynamic_loaded_modules {
     my @dynamic_loaded_modules = grep { !$initial_modules{$_} } keys %INC;
     my $dynamic_loaded_modules = join "¥n", @dynamic_loaded_modules;
-    warn $dynamic_loaded_modules;
-    return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
+    _write_log($dynamic_loaded_modules);
 }
 
 sub _write_log {
     my $text = shift;
-    my $output = file($ENV{DLMPROF})->openw or croak "Can't read $ENV{DLMPROF}: $!";
-    $output->print($text);
-    $output->close;
+    warn $text;
+    # TODO to be fixed
+    #my $output = file($ENV{DLMPROF})->openw or croak "Can't read $ENV{DLMPROF}: $!";
+    #$output->print($text);
+    #$output->close;
 }
 
 # arrange for the profile to be enabled in each child
@@ -106,7 +112,7 @@ It's often a good idea to use just one child process when profiling, which you
 can do by setting the C<MaxClients> to 1 in httpd.conf.
 
 Using an C<IfDefine> blocks lets you leave the profile configuration in place
-and enable it whenever it's needed by adding C<-D NYTPROF> to the httpd startup
+and enable it whenever it's needed by adding C<-D DLMPROF> to the httpd startup
 command line.
 
     <IfDefine DLMPROF>
