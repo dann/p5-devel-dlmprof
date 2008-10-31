@@ -1,8 +1,9 @@
 package Devel::DLMProf::Apache;
-our $VERSION = 0.01;
-use vars qw(%initial_modules);
+our $VERSION = '0.02';
+use vars qw(%initial_modules $map $memory_before);
 use Carp;
 use Path::Class qw(file);
+use Linux::Smaps;
 
 BEGIN {
 
@@ -15,6 +16,7 @@ BEGIN {
         warn "Defaulting DLMPROF env var to '$ENV{DLMPROF}'";
     }
 
+    $map=Linux::Smaps->new($$);
     require Devel::DLMProf;
 }
 
@@ -25,18 +27,27 @@ use constant MP2 => (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERS
     : 0;
 
 sub child_init {
+    $memory_before = $map->all->size;
     $initial_modules{$_}++ for keys %INC;
 }
 
 sub child_exit {
     profile_dynamic_loaded_modules();
+    profile_memory_diff();
     return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
 }
 
 sub profile_dynamic_loaded_modules {
     my @dynamic_loaded_modules = grep { !$initial_modules{$_} } keys %INC;
     my $dynamic_loaded_modules = join "¥n", @dynamic_loaded_modules;
-    _write_log($dynamic_loaded_modules);
+    _write_log("### Dynamic Loaded Modules ###\n" . $dynamic_loaded_modules);
+}
+
+sub profile_memory_diff {
+    my $map_after =Linux::Smaps->new($$);
+    my $memory_after = $map_after->all->size;
+    my $memory_diff =  $memory_after - $memory_before; 
+    _write_log("### memory (after-before) ###\n" . $memory_diff);
 }
 
 sub _write_log {
