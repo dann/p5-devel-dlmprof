@@ -1,0 +1,134 @@
+package Devel::DLMProf::Apache;
+our $VERSION = 0.01;
+use vars qw(%initial_modules);
+use Carp;
+use Path::Class qw(file);
+
+BEGIN {
+
+    # Load Devel::NYTProf before loading any other modules
+    # in order that $^P settings apply to the compilation
+    # of those modules.
+
+    if (!$ENV{DLMPROF}) {
+        $ENV{DLMPROF} = "/tmp/dlmprof.$$.out";
+        warn "Defaulting DLMPROF env var to '$ENV{DLMPROF}'";
+    }
+
+    require Devel::DLMProf;
+}
+
+use strict;
+
+use constant MP2 => (exists $ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2)
+    ? 1
+    : 0;
+
+sub child_init {
+    $initial_modules{$_}++ for keys %INC;
+}
+
+sub child_exit {
+    my @dynamic_loaded_modules = grep { !$initial_modules{$_} } keys %INC;
+    my $dynamic_loaded_modules = join "¥n", @dynamic_loaded_modules;
+    warn $dynamic_loaded_modules;
+    return MP2 ? Apache2::Const::OK() : Apache::Constants::OK();
+}
+
+sub _write_log {
+    my $text = shift;
+    my $output = file($ENV{DLMPROF})->openw or croak "Can't read $ENV{DLMPROF}: $!";
+    $output->print($text);
+    $output->close;
+}
+
+# arrange for the profile to be enabled in each child
+# and cleanly finished when the child exits
+if (MP2) {
+    require mod_perl2;
+    require Apache2::ServerUtil;
+    require Apache2::Const;
+    my $s = Apache2::ServerUtil->server;
+    $s->push_handlers(PerlChildInitHandler => \&child_init);
+    $s->push_handlers(PerlChildExitHandler => \&child_exit);
+}
+else {
+    require Apache;
+    require Apache::Constants;
+    if (Apache->can('push_handlers')) {
+        Apache->push_handlers(PerlChildInitHandler => \&child_init);
+        Apache->push_handlers(PerlChildExitHandler => \&child_exit);
+    }
+    else {
+        Carp::carp("Apache.pm was not loaded");
+    }
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+Devel::DLMProf::Apache - Find dynamic loaded modules in mod_perl applications with Devel::DLMProf
+
+=head1 SYNOPSIS
+
+    # in your Apache config file with mod_perl installed
+    PerlPassEnv DLMPROF
+    PerlModule Devel::DLMProf::Apache
+
+=head1 DESCRIPTION
+
+This module allows mod_perl applications to be profiled using
+C<Devel::DLMProf>. 
+
+If the DLMPROF environment variable isn't set I<at the time
+Devel::DLMProf::Apache is loaded> then Devel::DLMProf::Apache will issue a
+warning and default it to:
+
+	file=/tmp/dlmprof.$$.out
+
+Try using C<PerlPassEnv> so you can set the DLMPROF environment variable externally.
+
+Each profiled mod_perl process will need to have terminated before you can
+successfully read the profile data file. The simplest approach is to start the
+httpd, make some requests (e.g., 100 of the same request), then stop it and
+process the profile data.
+
+Alternatively you could send a TERM signal to the httpd worker process to
+terminate that one process. The parent httpd process will start up another one
+for you ready for more profiling.
+
+=head2 Example httpd.conf
+
+It's often a good idea to use just one child process when profiling, which you
+can do by setting the C<MaxClients> to 1 in httpd.conf.
+
+Using an C<IfDefine> blocks lets you leave the profile configuration in place
+and enable it whenever it's needed by adding C<-D NYTPROF> to the httpd startup
+command line.
+
+    <IfDefine DLMPROF>
+        MaxClients 1
+        PerlModule Devel::DLMProf::Apache
+    </IfDefine>
+
+
+=head1 SEE ALSO
+
+L<Devel::DLMProf>
+
+=head1 AUTHOR
+
+B<Takatoshi Kitano>, C<< <kitano.tk at gmail.com> >>
+
+=head1 COPYRIGHT AND LICENSE
+
+Copyright (C) 2008 by Takatoshi Kitano
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself, either Perl version 5.8.8 or,
+at your option, any later version of Perl 5 you may have available.
+
+=cut

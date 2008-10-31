@@ -17,7 +17,7 @@ Devel::DLMProf -
 
 =head1 DESCRIPTION
 
-Devel::DLMProf is
+Devel::DLMProf is dynamic loaded modules detector.
 
 =head1 AUTHOR
 
