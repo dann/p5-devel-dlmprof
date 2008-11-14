@@ -21,9 +21,11 @@ BEGIN {
     }
 
     if (LINUX) {
-        unless ( eval { require Linux::Smaps } ) {
-            croak 'you must install Linux::Smaps';
-        }
+
+        # need to be fixed to support older kernel
+        #unless ( eval { require Linux::Smaps } ) {
+        #    croak 'you must install Linux::Smaps';
+        #}
     }
     elsif (BSD_LIKE) {
         unless ( eval { require BSD::Resource } ) {
@@ -66,10 +68,36 @@ sub get_current_process_memory_size {
     $memory_size;
 }
 
+# return process size (in KB)
 sub _get_linux_process_memory_size {
+    if ( eval { require Linux::Smaps } and Linux::Smaps->new($$) ) {
+        return _get_new_kernel_linux_process_memory_size();
+    }
+    else {
+        return _get_old_kernel_linux_process_memory_size();
+    }
+}
+
+sub _get_new_kernel_linux_process_memory_size {
     my $map         = Linux::Smaps->new($$);
     my $memory_size = $map->all->size;
     $memory_size;
+}
+
+sub _get_old_kernel_linux_process_memory_size {
+    my ( $size, $resident, $share ) = ( 0, 0, 0 );
+
+    my $file = "/proc/self/statm";
+    if ( open my $fh, "<$file" ) {
+        ( $size, $resident, $share ) = split /\s/, scalar <$fh>;
+        close $fh;
+    }
+    else {
+        croak "Fatal Error: couldn't access $file";
+    }
+
+    # linux on intel x86 has 4KB page size...
+    return $size * 4;
 }
 
 sub _get_bsd_process_memory_size {

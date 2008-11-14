@@ -2,7 +2,7 @@ package Devel::DLMProf;
 
 use strict;
 use warnings;
-our $VERSION = '0.03_01';
+our $VERSION = '0.03_02';
 
 1;
 __END__
