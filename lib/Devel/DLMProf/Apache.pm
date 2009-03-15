@@ -1,8 +1,8 @@
 package Devel::DLMProf::Apache;
-our $VERSION = '0.02';
 use vars qw(%initial_modules $memory_before);
 use Carp;
 use Path::Class qw(file);
+use Fcntl;
 
 use constant WIN32   => $^O eq 'MSWin32';
 use constant SOLARIS => $^O eq 'solaris';
@@ -108,7 +108,7 @@ sub _get_bsd_process_memory_size {
 
 sub profile_dynamic_loaded_modules {
     my @dynamic_loaded_modules = grep { !$initial_modules{$_} } keys %INC;
-    my $dynamic_loaded_modules = join "¥n", @dynamic_loaded_modules;
+    my $dynamic_loaded_modules = join "\n", @dynamic_loaded_modules;
     _write_log(
         "### Dynamic Loaded Modules ###\n" . $dynamic_loaded_modules );
 }
@@ -116,17 +116,18 @@ sub profile_dynamic_loaded_modules {
 sub profile_memory_diff {
     my $memory_after = get_current_process_memory_size();
     my $memory_diff  = $memory_after - $memory_before;
-    _write_log( "### memory (after-before) ###\n" . $memory_diff );
+    _write_log( "### memory (after-before) ###\n" . $memory_diff . " byte" );
 }
 
 sub _write_log {
     my $text = shift;
     warn $text;
-
-# TODO to be fixed
-#my $output = file($ENV{DLMPROF})->openw or croak "Can't read $ENV{DLMPROF}: $!";
-#$output->print($text);
-#$output->close;
+    $text = "\n" . $text;
+    my $file = "/tmp/dlmprof.$$.out";
+    sysopen( FH, $file, O_WRONLY | O_CREAT | O_APPEND )
+        or die "can't open $file: $!";
+    print FH $text;
+    close FH;
 }
 
 # arrange for the profile to be enabled in each child
@@ -140,15 +141,7 @@ if (MP2) {
     $s->push_handlers( PerlChildExitHandler => \&child_exit );
 }
 else {
-    require Apache;
-    require Apache::Constants;
-    if ( Apache->can('push_handlers') ) {
-        Apache->push_handlers( PerlChildInitHandler => \&child_init );
-        Apache->push_handlers( PerlChildExitHandler => \&child_exit );
-    }
-    else {
-        Carp::carp("Apache.pm was not loaded");
-    }
+    Carp::carp("mod_perl1.x isn't supported");
 }
 
 1;
@@ -162,6 +155,12 @@ Devel::DLMProf::Apache - Find dynamic loaded modules in mod_perl applications wi
 =head1 SYNOPSIS
 
     # in your Apache config file with mod_perl installed
+    PerlPassEnv DLMPROF
+    PerlModule Devel::DLMProf::Apache
+
+    # the case you use startup.pl
+
+    PerlPostConfigRequire /path/to/startup.pl
     PerlPassEnv DLMPROF
     PerlModule Devel::DLMProf::Apache
 
@@ -219,3 +218,4 @@ it under the same terms as Perl itself, either Perl version 5.8.8 or,
 at your option, any later version of Perl 5 you may have available.
 
 =cut
+

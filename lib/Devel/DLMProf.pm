@@ -2,14 +2,14 @@ package Devel::DLMProf;
 
 use strict;
 use warnings;
-our $VERSION = '0.03_02';
+our $VERSION = '0.05';
 
 1;
 __END__
 
 =head1 NAME
 
-Devel::DLMProf -
+Devel::DLMProf - dynamid loaded modules detector
 
 =head1 SYNOPSIS
 
