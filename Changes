@@ -1,5 +1,8 @@
 Revision history for Perl extension Devel::DLMProf
 
+0.05 Fri Mar 17 20:19:00 2009
+	* support mod_perl2 only
+
 0.03_02 Fri Nov 14 20:19:00 2008
 	* support older kernel linux
 
